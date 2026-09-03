@@ -1,4 +1,3 @@
-
 name: Ubuntu Desktop Cloud RDP
 
 on:
@@ -14,12 +13,12 @@ jobs:
       - name: 1. Enable Remote Desktop & Firewall
         run: |
           sudo apt update
-          sudo apt install -y xfce4 xfce4-goodies xrdp
-
-          sudo systemctl enable xrdp
-          sudo systemctl start xrdp
+          sudo apt install -y xfce4 xfce4-goodies xrdp xorgxrdp dbus-x11
 
           sudo adduser xrdp ssl-cert || true
+
+          sudo systemctl enable xrdp
+          sudo systemctl restart xrdp
 
           echo "XFCE Desktop and xRDP installed."
 
@@ -31,9 +30,32 @@ jobs:
 
           sudo usermod -aG sudo NvDAdmin
 
-          echo "startxfce4" | sudo tee /home/NvDAdmin/.xsession
+          echo "xfce4-session" | sudo tee /home/NvDAdmin/.xsession
           sudo chown NvDAdmin:NvDAdmin /home/NvDAdmin/.xsession
           sudo chmod +x /home/NvDAdmin/.xsession
+
+          sudo bash -c 'cat > /etc/xrdp/startwm.sh << "EOF"
+          #!/bin/sh
+          if [ -r /etc/profile ]; then
+              . /etc/profile
+          fi
+
+          if [ -r "$HOME/.profile" ]; then
+              . "$HOME/.profile"
+          fi
+
+          export XDG_CURRENT_DESKTOP=XFCE
+          export XDG_SESSION_DESKTOP=xfce
+          export XDG_CONFIG_DIRS=/etc/xdg/xdg-xfce:/etc/xdg
+          export XDG_DATA_DIRS=/usr/share/xfce4:/usr/local/share:/usr/share
+
+          exec startxfce4
+          EOF'
+
+          sudo chmod +x /etc/xrdp/startwm.sh
+          sudo systemctl restart xrdp
+
+          echo "Linux user and XFCE session configured."
 
       - name: 3. Install & Connect Tailscale VPN
         env:
@@ -45,7 +67,7 @@ jobs:
 
           # Connect to Tailscale network
           sudo tailscale up \
-            --authkey="$TAILSCALE_AUTHKEY" \
+            --auth-key="$TAILSCALE_AUTHKEY" \
             --hostname="github-linux-rdp"
 
           sleep 8
@@ -59,7 +81,6 @@ jobs:
           echo "=================================================="
           echo "  Tailscale IP : $ts_ip"
           echo "  Username     : NvDAdmin"
-          echo "  Password     : P@ssw0rd1qazXSW@#"
           echo "  >> Open mstsc and connect to: $ts_ip"
           echo "=================================================="
 
